@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scalper Simulator</title>
+<style>
+:root{--bg:#10101c;--fg:#fff;--acc:#ffcb05;--pn:rgba(10,10,30,.8);--bad:#ff4d4d;--ok:#4dff88;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;overflow:hidden}
+canvas{display:block}
+.p{position:fixed;background:var(--pn);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.4}
+#hud{top:8px;left:8px;min-width:200px}
+.bar{height:8px;background:#333;border-radius:4px;margin:3px 0 6px;overflow:hidden}
+.bar i{display:block;height:100%;width:100%;background:var(--ok)}
+#st i{background:#4db8ff}#rp i{background:#b57bff}
+#rules{top:8px;right:8px;max-width:230px;font-size:12px}
+#chat{left:8px;bottom:8px;width:290px;max-width:60vw}
+.m{display:flex;gap:6px;align-items:center;margin:3px 0;background:#2a2d4a;border-radius:6px;padding:4px 6px;font-size:12px}
+.m span{flex:1}.m b{color:#8ea1ff}
+.m button{background:var(--bad);border:0;color:#fff;border-radius:4px;padding:3px 7px;cursor:pointer;font-weight:700}
+#toast{top:42%;left:50%;transform:translateX(-50%);font-size:22px;font-weight:800;color:var(--acc);text-align:center;display:none;text-shadow:0 2px 4px #000;background:none}
+#sec{bottom:70px;left:50%;transform:translateX(-50%);display:none;text-align:center;width:260px;border:2px solid var(--bad)}
+#ov{inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:rgba(8,8,24,.93);border-radius:0;font-size:15px;z-index:9}
+#ov h1{color:var(--acc);font-size:38px;margin:0 0 6px}
+#ov button{background:var(--acc);color:#111;border:0;border-radius:8px;padding:12px 26px;font-size:18px;font-weight:800;cursor:pointer;margin-top:14px}
+</style></head><body>
+<div class="p" id="hud">
+ <div>💵 $<b id="mn">60</b> &nbsp; 📦 Packs: <b id="got">0</b>/24 &nbsp; 🥷 Stolen: <b id="lost">0</b>/13</div>
+ <div>Huffing (stamina) <small id="cap"></small></div><div class="bar" id="st"><i></i></div>
+ <div>Mod reputation <small id="rl"></small></div><div class="bar" id="rp"><i></i></div>
+ <div id="cl">Aisle: none (press C in an aisle)</div><div id="sc"></div>
+</div>
+<div class="p" id="rules"><b>Waddle Rules</b><br>1. Waddle only. No sprinting.<br>2. Out of breath = forced wheeze.<br>3. Every pack makes you heavier &amp; slower.<br>4. Rep 60+ = $10 every 10s from Discord. Below that, no pay.<br>5. Hot dog stand on the right side: <b>H</b> to swallow one whole.<br>6. A thief sprints by sometimes. Slam him with Space!<br>WASD move · mouse look (click screen) or ←→ · 1–5 ban spam · E grab/loot · Space belly‑bump / resist · C claim aisle</div>
+<div class="p" id="chat"><b>#restock‑alerts</b> <small>(you’re the mod — ban spam!)</small><div id="msgs"></div></div>
+<div class="p" id="hint" style="bottom:70px;left:50%;transform:translateX(-50%);display:none">🌭 Press <b>H</b>: hot dog $8 (full energy + bigger stamina capacity)</div>
+<div class="p" id="ph" style="right:8px;bottom:8px;width:230px;display:none;border:2px solid #4db8ff"><b>📱 eBay</b><div id="pn"></div><div id="pb" style="font-size:20px;font-weight:800;color:var(--ok)"></div><div id="pl" style="font-size:11px;opacity:.85"></div></div>
+<div class="p" id="toast"></div>
+<div class="p" id="sec">🚨 SECURITY! MASH SPACE TO STAY! 🚨<div class="bar" id="rs"><i style="background:var(--bad)"></i></div></div>
+<div class="p" id="ov"><h1>SCALPER SIMULATOR</h1>
+ <div style="max-width:440px">You are an enormous, ravenous scalper (first person). Packs cost <b>$20</b>, so find junk lying in the aisles and sell it on eBay. Grab <b>24 Pokémon card packs</b>, belly‑bump rival scalpers, moderate your Discord, and <b>claim an aisle and hold it</b> when security shows up.<br><br>Turn your sound on — he’s very hungry.<br>Lose if 13 packs get stolen or your mod rep hits zero.</div>
+ <button id="go">START WADDLING</button></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xbfd8ff);
+const cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,200);
+const R=new THREE.WebGLRenderer({antialias:true});R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);
+addEventListener('resize',()=>{R.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()});
+scene.add(new THREE.HemisphereLight(0xffffff,0x888899,1));
+const dl=new THREE.DirectionalLight(0xffffff,.6);dl.position.set(10,20,10);scene.add(dl);
+const M=c=>new THREE.MeshLambertMaterial({color:c});
+function box(w,h,d,c,x,y,z,p=scene){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(c));m.position.set(x,y,z);p.add(m);return m}
+function sph(r,c,x,y,z,p){const m=new THREE.Mesh(new THREE.SphereGeometry(r,18,14),M(c));m.position.set(x,y,z);p.add(m);return m}
+// store
+box(46,.2,34,0xf0efe8,0,-.1,0);
+box(46,6,.5,0xfff2c2,0,3,-17);box(.5,6,34,0xfff2c2,23,3,0);box(.5,6,34,0xfff2c2,-23,3,0);
+box(.4,4.5,5,0x2ecc71,-22.6,2.2,0);
+box(14,2,.4,0xffcb05,0,5,-16.7);box(46,.3,34,0xdddddd,0,6,0);
+const AC=[-6,0,6],AK=[0xffd6d6,0xd6ffd6,0xd6d6ff];
+AC.forEach((a,i)=>box(28,.02,4.8,AK[i],0,.01,a));
+[-9,-3,3,9].forEach(z=>box(28,2.4,1.2,0x8a5a2b,0,1.2,z));
+box(2,1.3,8,0xcc2222,20,.65,0);box(2.4,.15,8.4,0xffffff,20,1.35,0);box(.3,2.2,8.4,0xffcb05,21.7,2.4,0);
+for(let i=0;i<5;i++){box(.35,.3,1.2,0xe0a04a,20,1.58,-3+i*1.5);box(.25,.2,1.2,0xc0392b,20,1.7,-3+i*1.5)}
+// packs
+const packs=[],cols=[0xff4d4d,0x4da6ff,0xffd24d,0x7bd66b,0xc27bff];
+AC.forEach((a,ai)=>[-1,1].forEach(s=>{for(let i=0;i<6;i++){
+ const m=box(.6,.85,.18,cols[(i+ai+(s>0?2:0))%5],-12+i*4.8,i%2?1.7:.9,a+s*2.3);
+ packs.push({m,a:ai,taken:false,x:m.position.x,z:m.position.z})}}));
+// player
+const P=new THREE.Group();scene.add(P);
+const bodyG=new THREE.Group();P.add(bodyG);
+const belly=sph(1,0xe03c3c,0,1.3,0,bodyG);belly.scale.set(1.45,1.1,1.45);
+sph(.62,0xf2b38a,0,2.75,0,bodyG);
+sph(.1,0x111111,-.2,2.85,.55,bodyG);sph(.1,0x111111,.2,2.85,.55,bodyG);
+const mouth=sph(.17,0x7a1f1f,0,2.55,.55,bodyG);
+box(.5,.9,.5,0xf2b38a,-1.55,1.4,0,bodyG);box(.5,.9,.5,0xf2b38a,1.55,1.4,0,bodyG);
+box(.7,.7,.7,0x335,-.55,.35,0,bodyG);box(.7,.7,.7,0x335,.55,.35,0,bodyG);
+P.position.set(-18,0,0);bodyG.visible=false;
+// rivals
+const rivals=[];
+function mkRival(c){const g=new THREE.Group();
+ const b=sph(1,c,0,1.2,0,g);b.scale.set(1.35,1.1,1.35);
+ sph(.5,0xf5d0b0,0,2.6,0,g);box(.7,.25,.7,0x222222,0,3.05,0,g);
+ box(.5,.6,.5,0x222,-.5,.3,0,g);box(.5,.6,.5,0x222,.5,.3,0,g);
+ scene.add(g);return{g,hp:3,carry:null,kb:new THREE.Vector3(),respawn:0}}
+[0x22aa66,0xaa44cc,0xdd8822,0x2299cc,0xcc3333,0x44cccc,0x888822,0xcc44aa].forEach((c,i)=>{const r=mkRival(c);r.g.visible=false;r.respawn=6+i*14;rivals.push(r)});
+// security
+const secG=new THREE.Group();
+(()=>{const b=new THREE.Mesh(new THREE.CylinderGeometry(.7,.8,1.8,12),M(0x1b2a6b));b.position.y=1.4;secG.add(b);
+ sph(.45,0xe0b090,0,2.7,0,secG);box(.9,.25,.9,0x0a1240,0,3.1,0,secG);box(.3,.3,.1,0xffd700,0,1.9,.8,secG);
+ box(.3,1,.3,0x111,-.4,.5,0,secG);box(.3,1,.3,0x111,.4,.5,0,secG)})();
+secG.visible=false;scene.add(secG);
+// thief
+const thief=new THREE.Group();(()=>{const b=new THREE.Mesh(new THREE.CylinderGeometry(.35,.45,1.4,10),M(0xffe600));b.position.y=1.1;thief.add(b);sph(.32,0xf5d0b0,0,2.1,0,thief);box(.8,.5,.05,0xffffff,0,1.2,.5,thief);box(.18,.8,.18,0x222,-.2,.4,0,thief);box(.18,.8,.18,0x222,.2,.4,0,thief)})();thief.visible=false;scene.add(thief);
+const TH={on:false,t:30,dir:1,hit:false};
+// state
+const G={maxSt:100,yaw:-Math.PI/2,pitch:0,money:60,lootT:8,on:false,got:0,lost:0,rep:100,st:100,rest:0,claim:-1,claimT:0,bump:0,secT:300,sec:false,struggle:false,res:50,chatT:2,t:0};
+const keys={};
+addEventListener('keydown',e=>{if(!G.on)return;const k=e.key.toLowerCase();if(e.code==='Space'){e.preventDefault();if(e.repeat)return;if(G.struggle){G.res=Math.min(100,G.res+13)}else bump()}
+ keys[k]=true;if(k==='e')grab();if(k==='c')claim();if(k==='h')eatDog();if(k>='1'&&k<='5')ban($('msgs').children[+k-1])});
+R.domElement.addEventListener('click',()=>{if(G.on&&R.domElement.requestPointerLock)R.domElement.requestPointerLock()});
+document.addEventListener('mousemove',e=>{if(document.pointerLockElement){G.yaw-=e.movementX*.0025;G.pitch=Math.max(-.6,Math.min(.6,G.pitch-e.movementY*.0025))}});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+// audio / voice
+let AC_,voice=null;
+function pick(){if(!window.speechSynthesis)return;const v=speechSynthesis.getVoices();voice=v.find(x=>/^en/i.test(x.lang)&&/daniel|alex|david|fred|male/i.test(x.name))||v.find(x=>/^en/i.test(x.lang))||null}
+if(window.speechSynthesis){speechSynthesis.onvoiceschanged=pick;pick()}
+function say(t,force){if(!window.speechSynthesis)return;if(speechSynthesis.speaking&&!force)return;if(force)speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(t);u.pitch=0;u.rate=.45;u.volume=1;if(voice)u.voice=voice;speechSynthesis.speak(u)}
+function grunt(f=70,d=.6){if(!AC_)return;const o=AC_.createOscillator(),l=AC_.createOscillator(),lg=AC_.createGain(),g=AC_.createGain(),fl=AC_.createBiquadFilter();
+ o.type='sawtooth';o.frequency.value=f;l.frequency.value=14;lg.gain.value=18;l.connect(lg);lg.connect(o.frequency);fl.type='lowpass';fl.frequency.value=320;
+ g.gain.setValueAtTime(.5,AC_.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC_.currentTime+d);o.connect(fl);fl.connect(g);g.connect(AC_.destination);o.start();l.start();o.stop(AC_.currentTime+d);l.stop(AC_.currentTime+d)}
+const EAT=['Mmmmm... Pokemon cards... nom nom nom','Gimme the Charizard... mmmm','Ohhh yeah... so shiny... delicious','Nom nom nom... more packs','Mmm... I could eat a whole booster box'];
+// ui
+let tt;function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(tt);tt=setTimeout(()=>e.style.display='none',1800)}
+function aisleOf(p){if(Math.abs(p.x)>15)return -1;for(let i=0;i<3;i++)if(Math.abs(p.z-AC[i])<2)return i;return -1}
+function grab(){const li=loot.findIndex(l=>Math.hypot(l.x-P.position.x,l.z-P.position.z)<3);if(li>=0&&!auc){startAuc(loot.splice(li,1)[0]);return}let b=null,bd=3.3;packs.forEach(k=>{if(k.taken)return;const d=Math.hypot(k.x-P.position.x,k.z-P.position.z);if(d<bd){bd=d;b=k}});
+ if(b)take(b);else toast('No pack in reach')}
+function take(k){if(G.money<20){toast('Need $20! Sell junk on eBay');return}G.money-=20;k.taken=true;k.m.visible=false;G.got++;grunt(60+Math.random()*30);say(EAT[Math.random()*EAT.length|0])}
+function claim(){const a=aisleOf(P.position);if(a<0)return toast('Stand in an aisle first!');G.claim=a;G.claimT=0;toast('AISLE '+(a+1)+' CLAIMED. DO NOT MOVE.');say('This aisle is mine... mmmm',1)}
+function bump(){if(G.bump>0)return;G.bump=.5;if(TH.on&&!TH.hit&&thief.position.distanceTo(P.position)<4.5){TH.hit=true;toast('You body-slammed the thief!')}bodyG.scale.set(1.25,.9,1.25);grunt(90,.25);
+ rivals.forEach(r=>{if(!r.g.visible)return;const d=r.g.position.clone().sub(P.position);d.y=0;const f=new THREE.Vector3(-Math.sin(G.yaw),0,-Math.cos(G.yaw));if(d.length()<4.5&&d.clone().normalize().dot(f)>.3){r.hp--;r.kb.copy(d.normalize().multiplyScalar(16));
+  if(r.carry){r.carry.taken=false;r.carry.m.visible=true;r.carry=null;toast('Pack recovered!')}
+  if(r.hp<=0){r.g.visible=false;r.respawn=6;toast('Scalper crushed!');say('Hehhh... get off my aisle',1)}}})}
+const SPAM=[['xX_nitro_Xx','FREE NITRO click here!!'],['crypto_king','DM me for 1000x gains'],['psa10_deals','cheap PSA 10s, trust me bro'],['botman','join my server pls pls']];
+const LEGIT=[['ashk','restock at Target?'],['mistyfan','gm everyone'],['brock99','anyone pull a Charizard?'],['proxy_pete','love this server']];
+function ban(d){if(!G.on||!d)return;if(d.dataset.spam==='1'){G.rep=Math.min(100,G.rep+3)}else{G.rep-=9;toast('You banned a normal user!')}d.remove()}
+function spawnMsg(){const spam=Math.random()<.55,L=spam?SPAM:LEGIT,x=L[Math.random()*L.length|0];
+ const d=document.createElement('div');d.className='m';d.innerHTML='<i class="n"></i><b>'+x[0]+'</b><span>'+x[1]+'</span><button>BAN</button>';
+ d.dataset.spam=spam?1:0;d.dataset.exp=G.t+9;
+ d.querySelector('button').onclick=()=>ban(d);
+ $('msgs').appendChild(d);while($('msgs').children.length>5)$('msgs').firstChild.remove()}
+function push(p,r){for(const s of[-9,-3,3,9]){const d=p.z-s;if(Math.abs(d)<r&&Math.abs(p.x)<14.5)p.z=s+(d<0?-r:r)}}
+function end(win){G.on=false;const o=$('ov');o.style.display='flex';
+ o.innerHTML='<h1>'+(win?'YOU CORNERED THE MARKET':'GAME OVER')+'</h1><div>'+(win?'The shelves are bare and so is your dignity. You scalped '+G.got+' packs.':(G.rep<=0?'Discord fired you as mod.':'Rival scalpers took too many packs.')+' You got '+G.got+' packs.')+'</div><button onclick="location.reload()">PLAY AGAIN</button>';
+ say(win?'Mmmmm... all of them... all mine':'Nooo... my cards',1)}
+$('go').onclick=()=>{$('ov').style.display='none';G.on=true;AC_=new(window.AudioContext||window.webkitAudioContext)();
+ say('Mmmmm... Pokemon cards... I must have them all... nom nom nom',1)};
+const ITEMS=['Mystery box (it rattles)','Slightly used shopping cart','Haunted Pikachu plush','Expired Lunchables, sealed','Wet cardboard, "vintage"'],BIDD=['Sweaty Cryptobro 🪙','Karen (has a coupon)','Gary (knows a guy)','Pikachu Truther','Dave from Accounting'],loot=[];let auc=null;
+function spawnLoot(){if(loot.length>=2)return;const a=AC[Math.random()*3|0],x=-10+Math.random()*20,m=box(.9,.9,.9,0xb06bff,x,.5,a+(Math.random()-.5)*1.4);loot.push({m,x,z:m.position.z});toast('👀 Something is lying in an aisle...')}
+function startAuc(l){scene.remove(l.m);auc={name:ITEMS[Math.random()*ITEMS.length|0],price:8+(Math.random()*12|0),t:0,next:1};$('ph').style.display='block';$('pn').textContent='Listing: '+auc.name;$('pl').innerHTML='';toast('📱 *opens phone, lists on eBay*');say('Mmmm... listing it... who wants it',1)}
+function nearDog(){return P.position.x>15&&Math.abs(P.position.z)<6}
+function eatDog(){if(!nearDog())return toast('The hot dog stand is on the right side of the store');if(G.eatT>0||G.struggle)return;if(G.money<8)return toast('Need $8 for a hot dog');
+ G.money-=8;G.eatT=.9;G.rest=0;G.maxSt=Math.min(250,G.maxSt+15);G.st=G.maxSt;toast('🌭 GULP! Swallowed whole. Capacity '+G.maxSt);grunt(55,.9);say('Hrrrmm... GULP... whole thing... mmmmm... more',1)}
+function yell(t,p,r,cb){if(!window.speechSynthesis)return cb&&cb();speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.pitch=p;u.rate=r;u.volume=1;if(voice)u.voice=voice;if(cb)u.onend=cb;speechSynthesis.speak(u)}
+// loop
+const clock=new THREE.Clock(),door=new THREE.Vector3(-21.5,0,0);
+function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);
+ if(G.on){G.t+=dt;update(dt)}
+ cam.position.set(P.position.x,2.8+bodyG.position.y-(G.eatT>0?Math.sin(G.eatT*12)*.3:0),P.position.z);cam.rotation.set(G.pitch,G.yaw,0,'YXZ');R.render(scene,cam)}
+function update(dt){
+ // player
+ G.yaw+=((keys.arrowleft?1:0)-(keys.arrowright?1:0))*1.8*dt;const fw=(keys.w?1:0)-(keys.s?1:0),sd=(keys.d?1:0)-(keys.a?1:0);let dx=Math.cos(G.yaw)*sd-Math.sin(G.yaw)*fw,dz=-Math.sin(G.yaw)*sd-Math.cos(G.yaw)*fw;
+ if(G.rest>0){G.rest-=dt;dx=dz=0;bodyG.position.y=Math.sin(G.t*20)*.08}
+ const mv=(dx||dz)&&G.st>0&&!G.struggle;
+ if(mv){const l=Math.hypot(dx,dz),sp=Math.max(2.2,4.2-.06*G.got);
+  P.position.x+=dx/l*sp*dt;P.position.z+=dz/l*sp*dt;P.rotation.y=G.yaw;
+  G.st-=9*dt;bodyG.rotation.z=Math.sin(G.t*7)*.16;bodyG.position.y=Math.abs(Math.sin(G.t*7))*.2}
+ else{G.st=Math.min(G.maxSt,G.st+14*dt);bodyG.rotation.z*=.9;if(G.rest<=0)bodyG.position.y*=.9}
+ if(G.st<=0&&G.rest<=0){G.rest=2.5;G.st=35;toast('*WHEEZE*');say('Hhhhhh... haaaah... hhhhhh... snack break',1);grunt(50,1)}
+ P.position.x=Math.max(-20.5,Math.min(20.5,P.position.x));P.position.z=Math.max(-14,Math.min(14,P.position.z));push(P.position,1.7);
+ G.bump=Math.max(0,G.bump-dt);G.eatT=Math.max(0,(G.eatT||0)-dt);if(Math.abs(P.position.z)<4.4&&P.position.x>18)P.position.x=18;bodyG.scale.lerp(new THREE.Vector3(1,1,1),.15);
+ // claim
+ if(G.claim>=0){if(aisleOf(P.position)!==G.claim){G.claim=-1;toast('You left your aisle!')}
+  else{G.claimT+=dt;if(G.claimT>1.5){G.claimT=0;const k=packs.find(k=>!k.taken&&k.a===G.claim);if(k)take(k)}}}
+ // rivals
+ rivals.forEach(r=>{if(!r.g.visible){r.respawn-=dt;if(r.respawn<=0){r.g.visible=true;r.hp=3+Math.floor(G.t/90);r.g.position.set(-21,0,(Math.random()-.5)*20);toast('🚪 A new scalper entered the store!')}return}
+  const p=r.g.position;r.atk=(r.atk||0)-dt;if(!r.carry&&r.atk<=0&&Math.hypot(p.x-P.position.x,p.z-P.position.z)<2.3){r.atk=2;G.money=Math.max(0,G.money-8);toast('Mugged by a scalper! -$8');grunt(40,.3)}
+  if(r.kb.length()>.5){p.addScaledVector(r.kb,dt);r.kb.multiplyScalar(.9);return}
+  let t;if(r.carry)t=door;else{let bd=1e9;packs.forEach(k=>{if(k.taken)return;const d=Math.hypot(k.x-p.x,k.z-p.z);if(d<bd){bd=d;t=new THREE.Vector3(k.x,0,k.z);t.k=k}})}
+  if(!t)return;const d=new THREE.Vector3().subVectors(t,p);d.y=0;const l=d.length();
+  if(l>1.1){d.normalize();p.addScaledVector(d,(r.carry?2.2:2.8)*dt);r.g.rotation.y=Math.atan2(d.x,d.z);r.g.rotation.z=Math.sin(G.t*6)*.12}
+  else if(!r.carry&&t.k){t.k.taken=true;t.k.m.visible=false;r.carry=t.k}
+  if(r.carry&&p.x<-20.5){r.carry=null;G.lost++;r.g.visible=false;r.respawn=5;toast('A scalper escaped with a pack!');grunt(45,.5)}});
+ // security
+ G.secT-=dt;if(!G.sec&&G.secT<=0){G.sec=true;secG.visible=true;secG.position.copy(door);toast('SECURITY ENTERED THE STORE');say('Oh no... security',1)}
+ if(G.sec&&!G.struggle){const d=new THREE.Vector3().subVectors(P.position,secG.position);d.y=0;if(d.length()>2.6){d.normalize();secG.position.addScaledVector(d,4*dt);secG.rotation.y=Math.atan2(d.x,d.z)}else{G.struggle=true;G.res=50;$('sec').style.display='block'}}
+ if(G.struggle){G.res-=(G.claim>=0?16:30)*dt;$('rs').firstChild.style.width=Math.max(0,G.res)+'%';
+  if(G.res>=100){G.struggle=false;G.sec=false;secG.visible=false;G.secT=22;$('sec').style.display='none';toast('YOU HELD THE AISLE!');say('You cannot move me... mmmm',1)}
+  else if(G.res<=0){G.struggle=false;G.sec=false;secG.visible=false;G.secT=22;$('sec').style.display='none';G.claim=-1;P.position.set(-19,0,0);
+   const l=Math.min(3,G.got);G.got-=l;toast('EVICTED! Security confiscated '+l+' packs');say('Nooo... my packs',1)}}
+ TH.t-=dt;if(!TH.on&&TH.t<=0){TH.on=true;TH.hit=false;TH.dir=Math.random()<.5?1:-1;thief.visible=true;thief.position.set(-TH.dir*21,0,Math.max(-12,Math.min(12,P.position.z)));thief.rotation.y=TH.dir>0?Math.PI/2:-Math.PI/2;toast('👀 Someone is sprinting through the store...')}
+ if(TH.on){thief.position.x+=TH.dir*9*dt;if(!TH.hit)thief.position.z+=(P.position.z-thief.position.z)*.8*dt;thief.rotation.z=Math.sin(G.t*14)*.1;
+  if(!TH.hit&&Math.hypot(thief.position.x-P.position.x,thief.position.z-P.position.z)<2.6){TH.hit=true;if(G.got>0)G.got--;else G.money=Math.max(0,G.money-15);toast('"SCALPER! NO SCALPING!"');
+   yell('Scalper! No scalping!',2,1.3,()=>{toast('NO! MY DISCORD NITRO MODS!');grunt(45,.6);yell('NOOO! MY DISCORD NITRO MODS!',0,.5)})}
+  if(Math.abs(thief.position.x)>22){TH.on=false;thief.visible=false;TH.t=35+Math.random()*35}}
+ G.lootT-=dt;if(G.lootT<=0){G.lootT=22;spawnLoot()}
+ if(auc){auc.t+=dt;auc.next-=dt;if(auc.next<=0){auc.next=.7+Math.random()*1.1;auc.price+=1+(Math.random()*14|0);$('pl').innerHTML=BIDD[Math.random()*5|0]+' bids $'+auc.price+'<br>'+$('pl').innerHTML.split('<br>').slice(0,3).join('<br>')}
+  $('pb').textContent='$'+auc.price+' · '+Math.max(0,Math.ceil(9-auc.t))+'s left';
+  if(auc.t>=9){G.money+=auc.price;toast('SOLD for $'+auc.price+'!');say('Cash... now cards... mmmm',1);auc=null;$('ph').style.display='none'}}
+ // discord
+ G.payT=(G.payT||10)-dt;if(G.payT<=0){G.payT=10;if(G.rep>=60){G.money+=10;toast('💬 Good rep! Mod stipend +$10')}else toast('Low rep... no Discord pay')}
+ G.chatT-=dt;if(G.chatT<=0){G.chatT=2.6;spawnMsg()}
+ [...$('msgs').children].forEach(d=>{if(G.t>+d.dataset.exp){if(d.dataset.spam==='1'){G.rep-=5}d.remove()}});
+ // hud
+ $('got').textContent=G.got;$('mn').textContent=G.money;$('cap').textContent='· capacity '+G.maxSt;$('hint').style.display=(nearDog()&&!G.struggle)?'block':'none';$('rl').textContent=G.rep>=60?'· paying $10/10s':'· NOT paying';$('sc').textContent=G.sec?'🚨 Security is HERE':'Security arrives in '+Math.floor(Math.max(0,G.secT)/60)+':'+String(Math.ceil(Math.max(0,G.secT))%60).padStart(2,'0');[...$('msgs').children].forEach((d,i)=>{d.querySelector('.n').textContent=(i+1)+'.'});$('lost').textContent=G.lost;$('st').firstChild.style.width=Math.max(0,G.st/G.maxSt*100)+'%';
+ $('rp').firstChild.style.width=Math.max(0,G.rep)+'%';$('cl').textContent=G.claim>=0?'Aisle '+(G.claim+1)+' CLAIMED (auto‑grabbing)':'Aisle: none (press C in an aisle)';
+ if(G.got>=24)end(true);else if(G.lost>=13||G.rep<=0)end(false)}
+frame();
+</script></body></html>
